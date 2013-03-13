@@ -1,7 +1,7 @@
 var exec = require("child_process").exec;
 var querystring = require("querystring");
 var fs = require("fs");
-
+var formidable = require("formidable");
 //we are bringing the response object from the server TO the request handlers,
 //not returning content from the request handlers back to the server to respond.
 //instead, having the response object here allows the request handlers to 
@@ -11,7 +11,7 @@ var fs = require("fs");
 //with its own response object, we run the risk of returning no content because the async
 //operation may not have finished (and thus populating the content to return).
 
-function start(response, postData) {
+function start(request, response) {
   console.log("*** Request handler 'start' was called. ***");
 
   /*
@@ -36,9 +36,10 @@ function start(response, postData) {
       'charset=UTF-8" /> ' +
       '</head>' +
       '<body>' +
-      '<form action="/upload" method="POST">' +
-      '<textarea name="textie" rows="20" cols="60"></textarea>' +
-      '<input type="submit" value="Submit text"/>' +
+      '<form action="/upload" enctype="multipart/form-data" ' +
+      'method="POST">' +
+      '<input type="file" name="upload">' +
+      '<input type="submit" value="Upload file"/>' +
       '</form>' +
       '</body>' +
       '</html>';
@@ -48,16 +49,30 @@ function start(response, postData) {
       response.end();
 }
 
-function upload(response, postData) {
+function upload(request, response) {
   console.log("*** Request handler 'upload' was called. ***");
-  response.writeHead(200, {"Content-Type":"text/plain"});
-  //response.write("POST DATA RECEIVED: " + postData);
-  response.write("You've sent the text: " + 
-  querystring.parse(postData).textie);
+
+  var form = new formidable.IncomingForm();
+  console.log("about to parse");
+  form.parse(request, function(error, fields, files) {
+  console.log("parseing done.");
+
+  /* possible error on Windows systems: 
+     tried to rename to an already existing file.*/
+  fs.rename(files.upload.path, "/tmp/test.png", function(error) {
+    if (error) {
+      fs.unlink("/tmp/test.png");
+      fs.rename(files.upload.path, "/tmp/test.png");
+    }
+  });
+  response.writeHead(200, {"Content-Type":"text/html"});
+  response.write("received image:<br/> ");
+  response.write("<img src='/show' />"); 
   response.end();
+  });
 }
 
-function show(response, postData) {
+function show(request, response) {
   console.log("Request handler 'show' was called.");
   fs.readFile("/tmp/test.png", "binary", function(error, file) {
     if (error) {
